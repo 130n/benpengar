@@ -220,6 +220,7 @@ const keyLabel = (btn) => (inputMode === 'touch' ? btn.toUpperCase() : { a: 'Z',
 function unlockAudio() {
   if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { audio = null; } }
   audio?.resume?.();
+  if (audio && !Music.playing && G.mode !== 'over') { Music.attach(audio); Music.start(); }
 }
 window.addEventListener('keydown', (e) => {
   unlockAudio();
@@ -228,6 +229,7 @@ window.addEventListener('keydown', (e) => {
   if (KEYDIR[k]) { input.keys.add(KEYDIR[k]); e.preventDefault(); }
   if (KEY_A.includes(k) && !e.repeat) { input.aPressed = true; e.preventDefault(); }
   if (KEY_B.includes(k) && !e.repeat) { input.bPressed = true; e.preventDefault(); }
+  if (k === 'm' && !e.repeat) Music.toggleMute();
 });
 window.addEventListener('keyup', (e) => {
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -260,7 +262,10 @@ function padDir(x, y, prev) {
   }
   return horiz ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
 }
+// ljudknappen i HUD:en, mellan benräknaren och pengarna
+const MUTE = { x: 226, y: 8, w: 34, h: 26 };
 function classify(x, y) {
+  if (x >= MUTE.x && x < MUTE.x + MUTE.w && y >= MUTE.y - 6 && y < MUTE.y + MUTE.h) return { mute: true };
   if (y < CTRL_Y) return { btn: 'a' }; // tryck på kartan = A på start/slutskärmen
   if (x < PAD_ZONE_W) return { pad: padDir(x, y) };
   const da = (x - BTN_A.x) ** 2 + (y - BTN_A.y) ** 2, db = (x - BTN_B.x) ** 2 + (y - BTN_B.y) ** 2;
@@ -281,6 +286,7 @@ canvas.addEventListener('pointerdown', (e) => {
   try { canvas.setPointerCapture(e.pointerId); } catch { /* syntetiska/avbrutna pekare */ }
   const [x, y] = toGame(e);
   const c = { ...classify(x, y), y };
+  if (c.mute) { Music.toggleMute(); return; }
   pointers.set(e.pointerId, c);
   // tryck på kartan räknas bara som A på start-/slutskärmen
   if (c.btn === 'a' && (y >= CTRL_Y || G.mode !== 'play')) input.aPressed = true;
@@ -359,7 +365,7 @@ function update(dt) {
   if (G.mode === 'title' || G.mode === 'over') {
     if (input.aPressed && (G.mode === 'title' || G.overTimer <= 0)) {
       const wasOver = G.mode === 'over';
-      if (wasOver) newGame();
+      if (wasOver) { newGame(); Music.start(); }
       G.mode = 'play';
     }
     if (G.mode === 'over') G.overTimer -= dt;
@@ -554,7 +560,7 @@ function updatePull(dt) {
     const p = G.player;
     p.hair = pl.stage;
     G.pull = null;
-    if (p.hair >= 2) { G.mode = 'over'; G.overTimer = 0.8; return; }
+    if (p.hair >= 2) { G.mode = 'over'; G.overTimer = 0.8; Music.gameOver(); return; }
     G.mode = 'play';
     p.invuln = CFG.invulnTime;
     pl.skel.stun = CFG.stunTime;
@@ -639,13 +645,14 @@ function drawHud() {
   ctx.fillRect(0, HUD_H - 2, W, 2);
   // benräknaren: färdiga skelett först, max 7 syns
   const masks = counterMasks();
-  const shown = masks.slice(0, 7);
+  const shown = masks.slice(0, 6);
   shown.forEach((m, i) => {
     const x = 4 + i * 30, y = 4;
     if (m === 63) { ctx.fillStyle = '#4a3b25'; ctx.fillRect(x + 2, y + 1, 28, 31); }
     ctx.drawImage(IMG.counter_combos, (m % 8) * T, Math.floor(m / 8) * T, T, T, x, y, T, T);
   });
-  if (masks.length > 7) text(`+${masks.length - 7}`, 4 + 7 * 30, 18);
+  if (masks.length > 6) text(`+${masks.length - 6}`, 4 + 6 * 30, 18);
+  drawMuteIcon();
   if (!masks.length) text('PLOCKA BEN', 8, 17, '#7d7290');
   // pengar och maskar
   ctx.fillStyle = '#3d7a36'; ctx.fillRect(268, 8, 14, 9);
@@ -656,6 +663,19 @@ function drawHud() {
   ctx.fillStyle = '#e58ba0'; ctx.fillRect(268, 27, 10, 3); ctx.fillRect(278, 25, 3, 5);
   ctx.fillStyle = '#2a1f33'; ctx.fillRect(279, 26, 1, 1);
   shadowText(`${G.worms}`, 344, 25, '#f7c1cc', 1, 'right');
+}
+
+function drawMuteIcon() {
+  // högtalare + not, överkryssad när ljudet är av
+  const x = MUTE.x + 8, y = MUTE.y + 4, on = !Music.muted;
+  ctx.fillStyle = on ? '#c9bfd9' : '#5d5174';
+  ctx.fillRect(x, y + 5, 4, 6); ctx.fillRect(x + 4, y + 3, 2, 10); ctx.fillRect(x + 6, y + 1, 2, 14);
+  if (on) { ctx.fillRect(x + 11, y + 4, 1, 8); ctx.fillRect(x + 14, y + 2, 1, 12); }
+  else {
+    ctx.fillStyle = '#c44a5a';
+    for (let i = 0; i < 7; i++) { ctx.fillRect(x + 10 + i, y + 4 + i, 2, 1); ctx.fillRect(x + 16 - i, y + 4 + i, 2, 1); }
+  }
+  text('M', MUTE.x + 17, MUTE.y + 22, '#5d5174', 1, 'center');
 }
 
 function circle(cx, cy, r, color) {

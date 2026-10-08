@@ -19,10 +19,12 @@ Knapparna märks A/B på pekskärm och Z/X när du spelar med tangentbord
 | Gå | styrkorset | piltangenter / WASD |
 | A – begrav | A-knappen | Z / J / mellanslag |
 | B – släng mask | B-knappen | X / K |
+| Musik av/på | högtalaren i toppen | M |
 
 ## Struktur
 - `index.html`, `game.js` – spelet (ingen byggprocess, ren canvas).
   Balansvärden ligger i `CFG` överst i `game.js`.
+- `music.js` – originalmusik (8-bit, genererad med Web Audio): melodi, ackord och tempo överst i filen.
 - `assets/` – spritesheets som spelet laddar.
 - `art/` – grafikpipelinen: SVG ritad på 32x32-rutnät → Chromium → pixelering.
   Se `art/README.md`.
