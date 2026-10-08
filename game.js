@@ -190,6 +190,7 @@ function mover(x, y, speed) {
 const posX = (m) => (m.fx + (m.tx - m.fx) * m.t) * T;
 const posY = (m) => (m.fy + (m.ty - m.fy) * m.t) * T;
 const tileOf = (m) => [Math.round(posX(m) / T), Math.round(posY(m) / T)];
+const canMove = (m, dir) => !isWall(m.tx + DIRS[dir][0], m.ty + DIRS[dir][1]);
 function tryMove(m, dir) {
   const [dx, dy] = DIRS[dir];
   m.dir = dir;
@@ -242,16 +243,28 @@ function toGame(e) {
   const r = canvas.getBoundingClientRect();
   return [(e.clientX - r.left) * (W / r.width), (e.clientY - r.top) * (H / r.height)];
 }
-function classify(x, y) {
+// Hela panelen är tryckyta: vänstra delen styr styrkorset, högra delen
+// delas mellan A och B efter vilken knapp fingret är närmast.
+const PAD_ZONE_W = 172;
+function padDir(x, y, prev) {
   const dx = x - PAD.x, dy = y - PAD.y;
-  if (dx * dx + dy * dy <= (PAD.r + 14) ** 2) {
-    if (Math.hypot(dx, dy) < 8) return { pad: null };
-    return { pad: Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up') };
+  if (Math.hypot(dx, dy) < 6) return prev ?? null;
+  const horiz = Math.abs(dx) > Math.abs(dy);
+  // lite tröghet nära diagonalen så att riktningen inte fladdrar
+  if (prev) {
+    const prevHoriz = prev === 'left' || prev === 'right';
+    if (prevHoriz !== horiz) {
+      const keep = prevHoriz ? Math.abs(dx) * 1.3 > Math.abs(dy) : Math.abs(dy) * 1.3 > Math.abs(dx);
+      if (keep) return prevHoriz ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    }
   }
-  if ((x - BTN_A.x) ** 2 + (y - BTN_A.y) ** 2 <= (BTN_A.r + 10) ** 2) return { btn: 'a' };
-  if ((x - BTN_B.x) ** 2 + (y - BTN_B.y) ** 2 <= (BTN_B.r + 10) ** 2) return { btn: 'b' };
+  return horiz ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+function classify(x, y) {
   if (y < CTRL_Y) return { btn: 'a' }; // tryck på kartan = A på start/slutskärmen
-  return {};
+  if (x < PAD_ZONE_W) return { pad: padDir(x, y) };
+  const da = (x - BTN_A.x) ** 2 + (y - BTN_A.y) ** 2, db = (x - BTN_B.x) ** 2 + (y - BTN_B.y) ** 2;
+  return { btn: da <= db ? 'a' : 'b' };
 }
 function updatePointers() {
   input.padDir = null; input.a = false; input.b = false;
@@ -265,7 +278,7 @@ canvas.addEventListener('pointerdown', (e) => {
   unlockAudio();
   if (e.pointerType !== 'mouse') inputMode = 'touch';
   e.preventDefault();
-  canvas.setPointerCapture?.(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch { /* syntetiska/avbrutna pekare */ }
   const [x, y] = toGame(e);
   const c = { ...classify(x, y), y };
   pointers.set(e.pointerId, c);
@@ -278,8 +291,7 @@ canvas.addEventListener('pointermove', (e) => {
   const c = pointers.get(e.pointerId);
   if (!c || c.pad === undefined) return;
   const [x, y] = toGame(e);
-  const n = classify(x, y);
-  c.pad = n.pad !== undefined ? n.pad : c.pad;
+  c.pad = padDir(x, y, c.pad); // fingret får glida var som helst, riktningen räknas från korsets mitt
   updatePointers();
 });
 const release = (e) => { pointers.delete(e.pointerId); updatePointers(); };
@@ -366,7 +378,14 @@ function update(dt) {
     [p.fx, p.tx] = [p.tx, p.fx]; [p.fy, p.ty] = [p.ty, p.fy]; p.t = 1 - p.t; p.dir = want;
   }
   stepMover(p, dt, CFG.playerSpeed);
-  if (!p.moving && want) tryMove(p, want);
+  if (!p.moving) {
+    if (!want) p.lastDir = null;
+    else if (canMove(p, want)) { tryMove(p, want); p.lastDir = want; }
+    // svängassistans: håller man en riktning som är blockerad fortsätter man
+    // framåt tills det öppnar sig en korridor åt det hållet
+    else if (p.lastDir && p.lastDir !== OPP[want] && canMove(p, p.lastDir)) tryMove(p, p.lastDir);
+    else p.dir = want;
+  }
 
   // knappar
   if (input.aPressed) bury();
