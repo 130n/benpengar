@@ -11,6 +11,9 @@ rakt upp, andra gången är det borta – och spelet slut.
 **Spela:** GitHub Pages-sidan för det här repot.
 
 ## Kontroller
+Knapparna märks A/B på pekskärm och Z/X när du spelar med tangentbord
+(växlar automatiskt efter vad du senast använde).
+
 | | Mobil | Tangentbord |
 |---|---|---|
 | Gå | styrkorset | piltangenter / WASD |

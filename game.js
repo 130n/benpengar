@@ -211,12 +211,18 @@ const dist2 = (a, b) => (posX(a) - posX(b)) ** 2 + (posY(a) - posY(b)) ** 2;
 const input = { dir: null, keys: new Set(), padDir: null, a: false, b: false, aPressed: false, bPressed: false };
 const KEYDIR = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' };
 const KEY_A = ['z', 'j', ' ', 'Enter'], KEY_B = ['x', 'k'];
+// Etiketterna följer senast använda indata: A/B på pekskärm, Z/X på tangentbord.
+// Startgissning från om huvudpekaren är grov (finger) eller fin (mus).
+let inputMode = window.matchMedia?.('(pointer: coarse)').matches ? 'touch' : 'keys';
+const keyLabel = (btn) => (inputMode === 'touch' ? btn.toUpperCase() : { a: 'Z', b: 'X' }[btn]);
+
 function unlockAudio() {
   if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { audio = null; } }
   audio?.resume?.();
 }
 window.addEventListener('keydown', (e) => {
   unlockAudio();
+  inputMode = 'keys';
   const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   if (KEYDIR[k]) { input.keys.add(KEYDIR[k]); e.preventDefault(); }
   if (KEY_A.includes(k) && !e.repeat) { input.aPressed = true; e.preventDefault(); }
@@ -257,6 +263,7 @@ function updatePointers() {
 }
 canvas.addEventListener('pointerdown', (e) => {
   unlockAudio();
+  if (e.pointerType !== 'mouse') inputMode = 'touch';
   e.preventDefault();
   canvas.setPointerCapture?.(e.pointerId);
   const [x, y] = toGame(e);
@@ -674,8 +681,8 @@ function drawControls() {
   }
   // knappar
   for (const [b, lbl, hint, down, ready] of [
-    [BTN_A, 'A', 'BEGRAV', input.a, completeSets() > 0],
-    [BTN_B, 'B', 'MASK', input.b, G.worms > 0],
+    [BTN_A, keyLabel('a'), 'BEGRAV', input.a, completeSets() > 0],
+    [BTN_B, keyLabel('b'), 'MASK', input.b, G.worms > 0],
   ]) {
     circle(b.x, b.y + 3, b.r, '#15101b');
     circle(b.x, b.y + (down ? 2 : 0), b.r, ready ? '#c44a5a' : '#6b3a48');
@@ -697,17 +704,17 @@ function drawTitle() {
   ctx.drawImage(IMG.player_walk, 0, 0, T, T, W / 2 - 52, MAP_Y + 100, T, T);
   ctx.drawImage(IMG.skeleton_walk, 0, 0, T, T, W / 2 + 20, MAP_Y + 100, T, T);
   text('PLOCKA BEN OCH BYGG SKELETT', W / 2, MAP_Y + 144, '#c9bfd9', 1, 'center');
-  text('A: BEGRAV ETT SKELETT - HÄMTA SEDELN', W / 2, MAP_Y + 156, '#c9bfd9', 1, 'center');
-  text('B: SLÄNG EN MASK SOM BETE', W / 2, MAP_Y + 168, '#c9bfd9', 1, 'center');
+  text(`${keyLabel('a')}: BEGRAV ETT SKELETT - HÄMTA SEDELN`, W / 2, MAP_Y + 156, '#c9bfd9', 1, 'center');
+  text(`${keyLabel('b')}: SLÄNG EN MASK SOM BETE`, W / 2, MAP_Y + 168, '#c9bfd9', 1, 'center');
   text('AKTA HÅRET!', W / 2, MAP_Y + 184, '#ffd966', 1, 'center');
-  if (Math.floor(performance.now() / 500) % 2) shadowText('TRYCK A', W / 2, MAP_Y + 208, '#b4e39a', 2, 'center');
+  if (Math.floor(performance.now() / 500) % 2) shadowText(`TRYCK ${keyLabel('a')}`, W / 2, MAP_Y + 208, '#b4e39a', 2, 'center');
 }
 function drawOver() {
   panel(MAP_Y + 70, 150);
   shadowText('SKALLIG!', W / 2, MAP_Y + 86, '#f3ead2', 4, 'center');
   shadowText(`$${G.money}`, W / 2, MAP_Y + 128, '#b4e39a', 3, 'center');
   text(`TID ${Math.floor(G.time)} S`, W / 2, MAP_Y + 160, '#c9bfd9', 1, 'center');
-  if (G.overTimer <= 0 && Math.floor(performance.now() / 500) % 2) shadowText('A = IGEN', W / 2, MAP_Y + 184, '#b4e39a', 2, 'center');
+  if (G.overTimer <= 0 && Math.floor(performance.now() / 500) % 2) shadowText(`${keyLabel('a')} = IGEN`, W / 2, MAP_Y + 184, '#b4e39a', 2, 'center');
 }
 
 // ---------- Huvudloop ----------
