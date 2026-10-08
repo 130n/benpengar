@@ -248,19 +248,19 @@ function toGame(e) {
 // Hela panelen är tryckyta: vänstra delen styr styrkorset, högra delen
 // delas mellan A och B efter vilken knapp fingret är närmast.
 const PAD_ZONE_W = 172;
+// Tummens kontaktpunkt rapporteras ofta lite ovanför där man tycker att man trycker,
+// så tryck nära mitten tolkades som "upp". Därför: punkten flyttas ner några pixlar,
+// större dödzon i mitten, och vågrätt vinner om det inte är tydligt lodrätt.
+const THUMB_OFFSET_Y = 6, PAD_DEAD = 12, VERT_BIAS = 1.25;
 function padDir(x, y, prev) {
-  const dx = x - PAD.x, dy = y - PAD.y;
-  if (Math.hypot(dx, dy) < 6) return prev ?? null;
-  const horiz = Math.abs(dx) > Math.abs(dy);
-  // lite tröghet nära diagonalen så att riktningen inte fladdrar
-  if (prev) {
-    const prevHoriz = prev === 'left' || prev === 'right';
-    if (prevHoriz !== horiz) {
-      const keep = prevHoriz ? Math.abs(dx) * 1.3 > Math.abs(dy) : Math.abs(dy) * 1.3 > Math.abs(dx);
-      if (keep) return prevHoriz ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-    }
-  }
-  return horiz ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  const dx = x - PAD.x, dy = y + THUMB_OFFSET_Y - PAD.y;
+  if (Math.hypot(dx, dy) < PAD_DEAD) return prev ?? null;
+  const ax = Math.abs(dx), ay = Math.abs(dy);
+  const horizDir = dx > 0 ? 'right' : 'left', vertDir = dy > 0 ? 'down' : 'up';
+  // tröghet: behåll nuvarande axel tills den andra är klart större
+  if (prev === 'left' || prev === 'right') return ay > ax * 1.5 ? vertDir : horizDir;
+  if (prev === 'up' || prev === 'down') return ax > ay * 1.5 ? horizDir : vertDir;
+  return ay > ax * VERT_BIAS ? vertDir : horizDir;
 }
 // ljudknappen i HUD:en, mellan benräknaren och pengarna
 const MUTE = { x: 226, y: 8, w: 34, h: 26 };
@@ -303,6 +303,10 @@ canvas.addEventListener('pointermove', (e) => {
 const release = (e) => { pointers.delete(e.pointerId); updatePointers(); };
 canvas.addEventListener('pointerup', release);
 canvas.addEventListener('pointercancel', release);
+// släpp allt om sidan tappar fokus, annars kan en riktning fastna (missat keyup/pointerup)
+function releaseAll() { pointers.clear(); input.keys.clear(); updatePointers(); }
+window.addEventListener('blur', releaseAll);
+document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
 
@@ -770,4 +774,5 @@ loadAll().then(() => requestAnimationFrame(frame)).catch((e) => {
 });
 
 // för automatiska tester
+window.__padTest = () => input.padDir; // för automatiska tester
 window.__benpengar = { get state() { return G; }, CFG, step(dt, n = 1) { for (let i = 0; i < n; i++) update(dt); draw(); } };
