@@ -1,5 +1,7 @@
 # Benpengar
 
+**▶ Spela: https://130n.github.io/benpengar/**
+
 Ett litet halloween-arkadspel i pixelgrafik, byggt för mobil i porträttläge.
 
 Plocka bendelar på kyrkogården och bygg ihop skelett. Ett färdigt skelett kan
@@ -7,8 +9,6 @@ du använda för att begrava ett av skeletten som jagar dig (A) – då sticker 
 benhand upp ur jorden med en sedel som du springer och hämtar. Fånga maskar och
 släng ut dem som bete (B). Blir du tagen dras du i håret: första gången står det
 rakt upp, andra gången är det borta – och spelet slut.
-
-**Spela:** GitHub Pages-sidan för det här repot.
 
 ## Kontroller
 Knapparna märks A/B på pekskärm och Z/X när du spelar med tangentbord
