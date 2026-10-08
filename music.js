@@ -1,6 +1,7 @@
 // Benpengar – originalmusik i 8-bitarsstil, genererad med Web Audio.
 // Ett kusligt "boom-chicka"-komp i E-moll: bas på slag 1 och 3, virvel på 2 och 4,
-// hi-hat på åttondelarna och en fyrkantsvågsmelodi ovanpå. 16 takter som loopar.
+// hi-hat på åttondelarna och en fyrkantsvågsmelodi ovanpå. Standard är en kort slinga
+// på 2 takter som loopas; den längre melodin (16 takter) finns kvar som 'theme'.
 'use strict';
 
 const Music = (() => {
@@ -26,11 +27,27 @@ const Music = (() => {
     ['A4', 1], ['B4', 1], ['C5', 1], ['D5', 1], ['E5', 2], ['C5', 2],
     ['B4', 2], ['A4', 1], ['G4', 1], ['F#4', 2], ['B3', 2],
   ];
-  const MELODY = [...A, ...A2, ...B, ...A2];
   // Ackord per takt: [grundton, kvint] för boom-chicka-basen
   const CH = { Em: ['E2', 'B2'], Am: ['A2', 'E3'], B7: ['B2', 'F#2'], C: ['C3', 'G2'], G: ['G2', 'D3'] };
-  const BARS = ['Em', 'Em', 'Am', 'B7', 'Em', 'C', 'B7', 'Em', 'C', 'G', 'Am', 'B7', 'Em', 'C', 'B7', 'Em'];
-  const STEPS = BARS.length * 8;
+
+  // Låtar: melodi + ackord per takt. 'hook' är en kort slinga i ringsignalsstil
+  // (2 takter) som loopas; 'theme' är den längre melodin på 16 takter.
+  const HOOK = [
+    ['B4', 1], ['E5', 1], ['r', 1], ['E5', 1], ['D#5', 1], ['E5', 1], ['B4', 2],
+    ['G4', 1], ['A4', 1], ['B4', 1], ['G4', 1], ['F#4', 2], ['E4', 2],
+  ];
+  const SONGS = {
+    hook: { melody: HOOK, bars: ['Em', 'B7'] },
+    theme: { melody: [...A, ...A2, ...B, ...A2], bars: ['Em', 'Em', 'Am', 'B7', 'Em', 'C', 'B7', 'Em', 'C', 'G', 'Am', 'B7', 'Em', 'C', 'B7', 'Em'] },
+  };
+  for (const song of Object.values(SONGS)) {
+    // melodin utplattad till steg: steg -> [ton, längd]
+    song.steps = song.bars.length * 8;
+    song.at = new Map();
+    let st = 0;
+    for (const [n, len] of song.melody) { if (n !== 'r') song.at.set(st, [n, len]); st += len; }
+  }
+  let song = SONGS.hook; // välj låt här: SONGS.hook eller SONGS.theme
 
   // Kort sorglig slinga när spelet tar slut
   const OVER = [['B4', 2], ['G4', 2], ['E4', 2], ['D#4', 2], ['E4', 6]];
@@ -41,9 +58,6 @@ const Music = (() => {
     return 440 * 2 ** ((SEMI[m[1]] + (Number(m[2]) + 1) * 12 - 69) / 12);
   };
 
-  // melodin utplattad till steg: steg -> [ton, längd]
-  const melodyAt = new Map();
-  { let s = 0; for (const [n, len] of MELODY) { if (n !== 'r') melodyAt.set(s, [n, len]); s += len; } }
 
   let ctx = null, master = null, noise = null, timer = null, step = 0, nextTime = 0, playing = false;
   let muted = false;
@@ -83,21 +97,21 @@ const Music = (() => {
 
   function scheduleStep(s, t) {
     const beat = s % 8;
-    const [root, fifth] = CH[BARS[Math.floor(s / 8)]];
+    const [root, fifth] = CH[song.bars[Math.floor(s / 8)]];
     // boom: bas på slag 1 och 3
     if (beat === 0) tone('triangle', freq(root), t, EIGHTH * 1.6, 0.22);
     if (beat === 4) tone('triangle', freq(fifth), t, EIGHTH * 1.6, 0.22);
     // chicka: virvel på 2 och 4, hi-hat på resten av åttondelarna
     if (beat === 2 || beat === 6) hit(t, 0.09, 0.09, 1500);
     else hit(t, 0.03, 0.035, 7000);
-    const m = melodyAt.get(s);
+    const m = song.at.get(s);
     if (m) tone('square', freq(m[0]), t, m[1] * EIGHTH * 0.92, 0.045);
   }
 
   function tick() {
     while (nextTime < ctx.currentTime + 0.12) {
       scheduleStep(step, nextTime);
-      step = (step + 1) % STEPS;
+      step = (step + 1) % song.steps;
       nextTime += EIGHTH;
     }
   }
@@ -128,14 +142,17 @@ const Music = (() => {
   }
 
   // Renderar hela slingan offline (för att lyssna/exportera utan att spela)
-  async function renderLoop(rate = 22050) {
-    const len = STEPS * EIGHTH + 0.6;
+  async function renderLoop(rate = 22050, name = 'hook', repeats = 1) {
+    const prev = song; song = SONGS[name];
+    const total = song.steps * repeats;
+    const len = total * EIGHTH + 0.6;
     const off = new OfflineAudioContext(1, Math.ceil(rate * len), rate);
     const saved = [ctx, master, noise];
     ctx = null; attach(off);
-    for (let s = 0; s < STEPS; s++) scheduleStep(s, 0.05 + s * EIGHTH);
+    for (let s = 0; s < total; s++) scheduleStep(s % song.steps, 0.05 + s * EIGHTH);
     const buf = await off.startRendering();
     [ctx, master, noise] = saved;
+    song = prev;
     return buf;
   }
 
